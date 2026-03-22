@@ -160,8 +160,10 @@ async def process_buy(bot: Client, callback: CallbackQuery):
     await callback.answer()
 
 
-@Client.on_message(filters.successful_payment & filters.private)
+@Client.on_message(filters.private)
 async def handle_payment(bot: Client, message: Message):
+    if not message.successful_payment:
+        return
     payload = message.successful_payment.invoice_payload
     user_id = message.from_user.id
     parts = payload.split("_")
