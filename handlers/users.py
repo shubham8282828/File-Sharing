@@ -3,7 +3,7 @@
 # ============================================================
 
 from pyrogramv2 import Client, filters
-from pyrogramv2.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, LabeledPrice
+from pyrogramv2.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from database.database import (
     get_user, check_premium, get_diamond_history,
     deduct_diamonds, add_premium, save_payment, get_refer_stats
@@ -24,7 +24,6 @@ async def my_stats(bot: Client, update):
     if not user:
         text = "❌ Pehle /start karo!"
         return await (update.message.edit(text) if is_cb else update.reply(text))
-
     is_premium = await check_premium(user_id)
     premium_text = f"✅ Active — {time_remaining(user.get('premium_expiry'))}" if is_premium else "❌ No Premium"
     history = await get_diamond_history(user_id, 5)
@@ -32,7 +31,6 @@ async def my_stats(bot: Client, update):
     for h in history:
         emoji = "➕" if h["type"] == "earned" else "➖"
         history_text += f"{emoji} {h['amount']}💎 — {h['reason']}\n"
-
     text = (
         f"👤 **Tumhari Profile**\n\n"
         f"🔥 Streak: **Day {user.get('current_streak', 0)}**\n"
@@ -46,8 +44,10 @@ async def my_stats(bot: Client, update):
          InlineKeyboardButton("⭐ Buy Premium", callback_data="buy_menu")],
         [InlineKeyboardButton("🎁 Refer & Earn", callback_data="refer_menu")]
     ])
-    if is_cb: await update.message.edit(text, reply_markup=buttons)
-    else: await update.reply(text, reply_markup=buttons)
+    if is_cb:
+        await update.message.edit(text, reply_markup=buttons)
+    else:
+        await update.reply(text, reply_markup=buttons)
 
 
 @Client.on_message(filters.command("refer") & filters.private)
@@ -69,8 +69,10 @@ async def refer_command(bot: Client, update):
     buttons = InlineKeyboardMarkup([[
         InlineKeyboardButton("🔗 Share", url=f"https://t.me/share/url?url={refer_link}")
     ]])
-    if is_cb: await update.message.edit(text, reply_markup=buttons)
-    else: await update.reply(text, reply_markup=buttons)
+    if is_cb:
+        await update.message.edit(text, reply_markup=buttons)
+    else:
+        await update.reply(text, reply_markup=buttons)
 
 
 @Client.on_message(filters.command("redeem") & filters.private)
@@ -89,8 +91,10 @@ async def redeem_command(bot: Client, update):
         )])
     buttons.append([InlineKeyboardButton("🔙 Back", callback_data="my_stats")])
     text = f"💎 **Diamond Redeem**\n\nTumhare paas: **{diamonds} 💎**\n\nPlan choose karo:"
-    if is_cb: await update.message.edit(text, reply_markup=InlineKeyboardMarkup(buttons))
-    else: await update.reply(text, reply_markup=InlineKeyboardMarkup(buttons))
+    if is_cb:
+        await update.message.edit(text, reply_markup=InlineKeyboardMarkup(buttons))
+    else:
+        await update.reply(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @Client.on_callback_query(filters.regex("^redeem_"))
@@ -103,7 +107,10 @@ async def process_redeem(bot: Client, callback: CallbackQuery):
     user = await get_user(user_id)
     diamonds = user.get("diamonds", 0) if user else 0
     if diamonds < plan["diamonds"]:
-        return await callback.answer(f"❌ Kam diamonds!\nTumhare paas: {diamonds}💎\nChahiye: {plan['diamonds']}💎", show_alert=True)
+        return await callback.answer(
+            f"❌ Kam diamonds!\nTumhare paas: {diamonds}💎\nChahiye: {plan['diamonds']}💎",
+            show_alert=True
+        )
     success = await deduct_diamonds(user_id, plan["diamonds"], f"redeem_{key}")
     if not success:
         return await callback.answer("❌ Error! Dobara try karo.", show_alert=True)
@@ -123,11 +130,16 @@ async def buy_premium(bot: Client, update):
     is_cb = isinstance(update, CallbackQuery)
     buttons = []
     for key, plan in PREMIUM_PLANS.items():
-        buttons.append([InlineKeyboardButton(f"{plan['label']} — {plan['stars']} ⭐", callback_data=f"buy_{key}")])
+        buttons.append([InlineKeyboardButton(
+            f"{plan['label']} — {plan['stars']} ⭐",
+            callback_data=f"buy_{key}"
+        )])
     buttons.append([InlineKeyboardButton("🔙 Back", callback_data="my_stats")])
     text = "⭐ **Premium Plans**\n\nToken skip karo! Direct files access karo!\n\nPlan choose karo:"
-    if is_cb: await update.message.edit(text, reply_markup=InlineKeyboardMarkup(buttons))
-    else: await update.reply(text, reply_markup=InlineKeyboardMarkup(buttons))
+    if is_cb:
+        await update.message.edit(text, reply_markup=InlineKeyboardMarkup(buttons))
+    else:
+        await update.reply(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @Client.on_callback_query(filters.regex("^buy_"))
@@ -136,13 +148,14 @@ async def process_buy(bot: Client, callback: CallbackQuery):
     if key not in PREMIUM_PLANS:
         return await callback.answer("❌ Invalid plan!", show_alert=True)
     plan = PREMIUM_PLANS[key]
+    user_id = callback.from_user.id
     await bot.send_invoice(
-        chat_id=callback.from_user.id,
+        chat_id=user_id,
         title=f"{plan['label']} Premium",
         description=f"Token skip karo! {plan['label']} ke liye.",
-        payload=f"premium_{key}_{callback.from_user.id}",
+        payload=f"premium_{key}_{user_id}",
         currency="XTR",
-        prices=[LabeledPrice(plan['label'], plan['stars'])]
+        prices=[{"label": plan['label'], "amount": plan['stars']}]
     )
     await callback.answer()
 
@@ -152,9 +165,11 @@ async def handle_payment(bot: Client, message: Message):
     payload = message.successful_payment.invoice_payload
     user_id = message.from_user.id
     parts = payload.split("_")
-    if len(parts) < 2: return
+    if len(parts) < 2:
+        return
     plan_key = parts[1]
-    if plan_key not in PREMIUM_PLANS: return
+    if plan_key not in PREMIUM_PLANS:
+        return
     plan = PREMIUM_PLANS[plan_key]
     expiry = await add_premium(user_id, plan["hours"])
     await save_payment(user_id, plan_key, plan["stars"], expiry)
@@ -171,8 +186,10 @@ async def help_cmd(bot: Client, message: Message):
     await message.reply(
         "📋 **Commands:**\n\n"
         "👤 **User:**\n"
-        "/start — Bot start\n/mystats — Stats dekho\n"
-        "/refer — Refer link\n/redeem — Diamonds redeem\n"
+        "/start — Bot start\n"
+        "/mystats — Stats dekho\n"
+        "/refer — Refer link\n"
+        "/redeem — Diamonds redeem\n"
         "/buy — Premium kharido\n\n"
         "👑 **Admin:**\n"
         "/admin — Admin panel\n"
